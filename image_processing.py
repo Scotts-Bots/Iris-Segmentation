@@ -75,7 +75,17 @@ def dilation_preprocess(image: np.ndarray) -> np.ndarray:
     dilated_img[:, mask_y] = 0
 
     return dilated_img
-       
+
+#perform circle hit-or-miss on a thresholded image to find pupil
+def erosion_preprocess(image: np.ndarray):
+    disk = morphology.disk(PARAMETERS.erosion_disk_radius)
+    eroded = deepcopy(image)
+
+    while np.count_nonzero(eroded) > PARAMETERS.erosion_max_pixels:
+        eroded = morphology.binary_erosion(eroded, disk)
+
+    return np.where(eroded == 1)
+   
 #find approximate position of pupil
 def calculate_pupil_position(gray_noiseless, intensity_threshold):
     group_a = []

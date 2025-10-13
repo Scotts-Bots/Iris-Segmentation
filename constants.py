@@ -14,3 +14,5 @@ class PARAMETERS:
     num_binary_dilations = 2
     radius_max = 10
     radius_factor = 2.5
+    erosion_disk_radius = 2
+    erosion_max_pixels = 500
