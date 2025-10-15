@@ -7,8 +7,8 @@ from skimage import filters, color
 from PIL import Image
 
 #find approximate position of pupil
-def calculate_pupil_position(gray_noiseless: np.ndarray, intensity_threshold: float):
-    img_height, img_width = gray_noiseless.shape
+def calculate_pupil_position(threshold_img: np.ndarray):
+    img_height, img_width = threshold_img.shape
     group_radius = PARAMETERS.group_radius_factor * img_width
 
     #two point groups for two eyes case - for basic clustering
@@ -17,8 +17,7 @@ def calculate_pupil_position(gray_noiseless: np.ndarray, intensity_threshold: fl
 
     #performs this again with a higher threshold in case it does not find anything
     while len(group_a) + len(group_b) == 0:
-        bin_threshold_img = gray_noiseless < intensity_threshold
-        dilated_img = dilation_preprocess(bin_threshold_img)
+        dilated_img = dilation_preprocess(threshold_img)
         eroded_img = erosion_preprocess(dilated_img)
         rows, cols = np.where(eroded_img == 1)
 
@@ -40,8 +39,8 @@ def calculate_pupil_position(gray_noiseless: np.ndarray, intensity_threshold: fl
     rad_y = int(PARAMETERS.eye_radius_factor * img_width) 
 
     # get average intensities of each pixel group
-    avg_a = np.average([gray_noiseless[x, y] for x, y in group_a])
-    avg_b = np.average([gray_noiseless[x, y] for x, y in group_b])
+    avg_a = np.average([threshold_img[x, y] for x, y in group_a])
+    avg_b = np.average([threshold_img[x, y] for x, y in group_b])
 
     # pick the average coords based on the greater average intensity between the two groups
     # TODO this was actually lesser than before - check if it does worse the other way now
@@ -58,6 +57,17 @@ def calculate_pupil_position(gray_noiseless: np.ndarray, intensity_threshold: fl
 
     return top, bottom, left, right, xavg, yavg, rad_x, rad_y     
     
+#find the iris center using canny edge detection and hough circles
+def get_iris_center(thresholded_img: np.ndarray): 
+    h = thresholded_img.shape[0]
+
+    eye_edges = feature.canny(thresholded_img)
+
+    hough_radii = np.arange(int(h/6), int(h/2), 1)
+    hough_spaces = hough_circle(eye_edges, hough_radii)
+    _, cx, cy, radii = hough_circle_peaks(hough_spaces, hough_radii, total_num_peaks=1)
+
+    return cx, cy, radii
 
 def iris_segmentation_and_prediction(image_path: str) -> IRIS_COLOR:
     '''
@@ -75,79 +85,39 @@ def iris_segmentation_and_prediction(image_path: str) -> IRIS_COLOR:
     gray_img = color.rgb2gray(img)
     gray_noiseless = filters.gaussian(gray_img, 1)
 
-    #calculate a threshold intensity
+    #calculate a threshold intensity and binary thresholded image
     min_intensity = np.min(gray_noiseless)
+
     if min_intensity < 0.1:
         intensity_threshold = PARAMETERS.base_threshold + 2*min_intensity
     else:
         intensity_threshold = PARAMETERS.base_threshold + min_intensity
 
+    bin_threshold_img = gray_noiseless < intensity_threshold
 
-    coords  = calculate_pupil_position(gray_noiseless, intensity_threshold)
+    # get pupil position coords and sliced eye image
+    coords  = calculate_pupil_position(bin_threshold_img)
     top, bottom, left, right, xavg, yavg, rad_x, rad_y = coords
-    
-    #after getting a sliced image of the pupil
-    eye_img = img[coord1:coord2,coord3:coord4]
-    gray_eye = gray_img[coord1:coord2,coord3:coord4]
-    #eye_threshold = gray_threshold[xavg-100:xavg+100,yavg-100:yavg+100]
-    eye_noiseless = gray_noiseless[coord1:coord2,coord3:coord4]
-    eye_threshold = np.zeros(gray_eye.shape)
-    for i in range(gray_eye.shape[0]):
-        for j in range(gray_eye.shape[1]):
-            if eye_noiseless[i][j] > intensity_threshold:
-                eye_threshold[i][j] = 1
+    eye_img = img[top:bottom, left:right]
 
-    #get center and radius of circle from canny edge and hough circle detection
-    cx,cy,radii = get_iris_center(eye_threshold,eye_img)
+    # get center and radius of circle from canny edge and hough circle detection
+    cx, cy, radii = get_iris_center(bin_threshold_img)
 
-    greatest_circle = 0
-    cxt = cy[greatest_circle] + xavg - radx
-    cyt = cx[greatest_circle] + yavg - rady
+    cxt = cy[0] + xavg - rad_x
+    cyt = cx[0] + yavg - rad_y
+    radi = radii[0] * (img.shape[1] / eye_img.shape[1])
 
-    radi = radii[greatest_circle]*(img.shape[1]/eye_img.shape[1])
+    # create a mask for pixels within the iris radius
+    X, Y = np.ogrid[:img.shape[0], :img.shape[1]]
+    dist_from_center = np.sqrt((X - cxt)**2 + (Y - cyt)**2)
+    mask = PARAMETERS.iris_inner_radius * radi < dist_from_center < PARAMETERS.iris_outer_radius * radi
 
     iris_img = deepcopy(img)
-    for i in range(img.shape[0]):
-        for j in range(img.shape[1]):
-            if np.linalg.norm(np.array([i,j])-np.array([cxt,cyt])) >= 0.6*radi:
-                iris_img[i][j] = [0,0,0]
+    iris_img[~mask] = [0, 0, 0]
+    # eye_threshold = bin_threshold_img[~mask] = 0
 
+    avg_colour = np.floor(np.average(iris_img.reshape(-1, iris_img.shape[-1]), axis=0)) 
 
-    gray_iris = color.rgb2gray(iris_img)
-    #plt.imshow(gray_iris,cmap=plt.cm.gray)
-
-    eye_threshold = deepcopy(gray_iris)
-    for i in range(img.shape[0]):
-        for j in range(img.shape[1]):
-            if gray_iris[i][j] < 0.12 or gray_iris[i][j] > 0.7:
-                eye_threshold[i][j] = 0
-            else:
-                eye_threshold[i][j] = 1
-
-    #calculate the average colour from the segmented iris
-    avg_colour = np.array([0,0,0])
-    count = 0
-    output_img = deepcopy(img)
-    for i in range(img.shape[0]):
-        for j in range(img.shape[1]):
-            if (eye_threshold[i][j]):
-                avg_colour += img[i][j]
-                count += 1
-            else:
-                output_img[i][j] = [0,0,0]
+    color_class = predict_eye_color(avg_colour)
     
-    avg_colour = avg_colour/count
-    avg_colour[np.isnan(avg_colour)] = 0
-    colour = np.zeros((3,3,3))
-    for i in range(len(avg_colour)):
-        avg_colour[i] = avg_colour[i]/255
-    colour[1][1] = avg_colour
-
-    reqColour = []
-    for i in range(3):
-        reqColour.append(int(np.floor(avg_colour[i]*256)))
-
-    #predict colour from average intensity and return result
-    out_colour = predict_eye_color(reqColour)
-    #print(out_colour) <---- IF YOU WANT TO PRINT OUT THE COLOUR WHEN RUNNING THROUGH ALL THE IMAGES
-    return out_colour, output_img
+    return color_class, iris_img
