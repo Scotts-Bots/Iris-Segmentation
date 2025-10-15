@@ -16,3 +16,7 @@ class PARAMETERS:
     radius_factor = 2.5
     erosion_disk_radius = 2
     erosion_max_pixels = 500
+    group_radius_factor = 0.25
+    eye_radius_factor = 0.12
+    iris_inner_radius = 0.1
+    iris_outer_radius = 0.7
