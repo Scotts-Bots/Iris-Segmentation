@@ -77,79 +77,14 @@ def dilation_preprocess(image: np.ndarray) -> np.ndarray:
     return dilated_img
 
 #perform circle hit-or-miss on a thresholded image to find pupil
-def erosion_preprocess(image: np.ndarray):
+def erosion_preprocess(image: np.ndarray) -> np.ndarray:
     disk = morphology.disk(PARAMETERS.erosion_disk_radius)
     eroded = deepcopy(image)
 
     while np.count_nonzero(eroded) > PARAMETERS.erosion_max_pixels:
         eroded = morphology.binary_erosion(eroded, disk)
 
-    return np.where(eroded == 1)
-   
-#find approximate position of pupil
-def calculate_pupil_position(gray_noiseless, intensity_threshold):
-    group_a = []
-    group_b = []
-    num_coords = 0
-
-    #performs this again with a higher threshold in case it does not find anything
-    while num_coords == 0:
-        bin_threshold_img = gray_noiseless < intensity_threshold
-        dilated_img = dilation_preprocess(bin_threshold_img)
-        coords = erosion_preprocess(dilated_img)
-
-        for r in range(len(coords[0])):
-            p = np.array([coords[0][r],coords[1][r]])
-            if len(group_a) == 0:
-                group_a.append(p)
-            elif np.linalg.norm(np.average(group_a)-p) >= 0.25*test_img.shape[1]:
-                group_b.append(p)
-            else:
-                group_a.append(p)
-
-        num_coords = len(group_a)+len(group_b)
-        intensity_threshold += PARAMETERS.threshold_increase
-           
-    radx = int(0.12*test_img.shape[0])
-    rady = int(0.12*test_img.shape[1])
-
-    a_avg_intensity = 0
-    for acoord in group_a:
-        a_avg_intensity += gray_noiseless[acoord[0]][acoord[1]]
-
-    b_avg_intensity = 0
-    for bcoord in group_b:
-        b_avg_intensity += gray_noiseless[bcoord[0]][bcoord[1]]
-
-    if len(group_a) == 0:
-        avg_a = 2000
-    else:
-        avg_a = a_avg_intensity/len(group_a)
-    if len(group_b) == 0:
-        avg_b = 2000
-    else:
-        avg_b = b_avg_intensity/len(group_b)
-
-    #xavg = int(np.floor(np.average(coords[0])))
-    #yavg = int(np.floor(np.average(coords[1])))
-    #print(len(group_a),len(group_b))
-    if avg_b >avg_a:
-        xavg,yavg = np.average(group_a,0)
-    else:
-        xavg,yavg = np.average(group_b,0)
-    xavg = int(np.floor(xavg))
-    yavg = int(np.floor(yavg))
-
-    #print(xavg,yavg,radx,rady)
-
-    coord1,coord2,coord3,coord4 = xavg-radx,xavg+radx,yavg-rady,yavg+rady
-    if coord1 < 0: coord1 = 0
-    if coord2 >= test_img.shape[0]: coord2 = test_img.shape[0]-1
-    if coord3 < 0: coord3 = 0
-    if coord4 >= test_img.shape[1]: coord4 = test_img.shape[1]-1
-
-    return coord1,coord2,coord3,coord4,xavg,yavg,radx,rady     
-    
+    return eroded
 
 
 

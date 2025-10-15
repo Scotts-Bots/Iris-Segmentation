@@ -1,9 +1,63 @@
 import numpy as np
 from copy import deepcopy
 from .constants import IRIS_COLOR, PARAMETERS
+from .image_processing import *
 
 from skimage import filters, color
 from PIL import Image
+
+#find approximate position of pupil
+def calculate_pupil_position(gray_noiseless: np.ndarray, intensity_threshold: float):
+    img_height, img_width = gray_noiseless.shape
+    group_radius = PARAMETERS.group_radius_factor * img_width
+
+    #two point groups for two eyes case - for basic clustering
+    group_a = []
+    group_b = []
+
+    #performs this again with a higher threshold in case it does not find anything
+    while len(group_a) + len(group_b) == 0:
+        bin_threshold_img = gray_noiseless < intensity_threshold
+        dilated_img = dilation_preprocess(bin_threshold_img)
+        eroded_img = erosion_preprocess(dilated_img)
+        rows, cols = np.where(eroded_img == 1)
+
+        for point in zip(rows, cols):
+            if len(group_a) == 0:
+                group_a.append(point)
+            else:
+                group_a_displacement = np.linalg.norm(np.average(group_a) - p)
+
+                if group_a_displacement < group_radius:
+                    group_a.append(point)
+                else:
+                    group_b.append(point)
+
+        intensity_threshold += PARAMETERS.threshold_increase
+    
+    # set eye ball radii
+    rad_x = int(PARAMETERS.eye_radius_factor * img_height) 
+    rad_y = int(PARAMETERS.eye_radius_factor * img_width) 
+
+    # get average intensities of each pixel group
+    avg_a = np.average([gray_noiseless[x, y] for x, y in group_a])
+    avg_b = np.average([gray_noiseless[x, y] for x, y in group_b])
+
+    # pick the average coords based on the greater average intensity between the two groups
+    # TODO this was actually lesser than before - check if it does worse the other way now
+    if avg_a > avg_b:
+        xavg, yavg = int(np.floor(np.average(group_a, 0)))
+    else:
+        xavg, yavg = int(np.floor(np.average(group_b, 0)))
+
+    # get image coord slices
+    top= np.max(xavg - rad_x, 0)
+    bottom = np.min(xavg + rad_x, img_height)
+    left = np.max(yavg - rad_y, 0) 
+    right = np.min(yavg + rad_y, img_width)
+
+    return top, bottom, left, right, xavg, yavg, rad_x, rad_y     
+    
 
 def iris_segmentation_and_prediction(image_path: str) -> IRIS_COLOR:
     '''
@@ -29,7 +83,8 @@ def iris_segmentation_and_prediction(image_path: str) -> IRIS_COLOR:
         intensity_threshold = PARAMETERS.base_threshold + min_intensity
 
 
-    coord1,coord2,coord3,coord4,xavg,yavg,radx,rady = calculate_pupil_position(img,gray_noiseless,intensity_threshold)
+    coords  = calculate_pupil_position(gray_noiseless, intensity_threshold)
+    top, bottom, left, right, xavg, yavg, rad_x, rad_y = coords
     
     #after getting a sliced image of the pupil
     eye_img = img[coord1:coord2,coord3:coord4]
