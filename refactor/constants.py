@@ -1,12 +1,12 @@
 from enum import Enum
 
 class IRIS_COLOR(Enum):
-    GRAY = 0
-    BLUE = 1
-    GREEN = 2
-    AMBER = 3
-    BROWN = 4
-    HAZEL = 5
+    GRAY = "gray"
+    BLUE = "blue"
+    GREEN = "green"
+    AMBER = "amber"
+    BROWN = "brown"
+    HAZEL = "hazel"
 
 class PARAMETERS:
     base_threshold = 0.05
