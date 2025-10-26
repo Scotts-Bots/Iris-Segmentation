@@ -40,7 +40,7 @@ def predict_eye_color(rgb_val: tuple[int, int, int]) -> IRIS_COLOR:
             return IRIS_COLOR.HAZEL.value
 
 #preprocesses an image by performing dilation and removing unnecessary noise in the image
-def dilation_preprocess(image: np.ndarray) -> np.ndarray:
+def dilation_preprocess(image: np.ndarray, display_intermediate_images=False) -> np.ndarray:
     img_height, img_width = image.shape
     dilated_img = deepcopy(image)
 
@@ -73,19 +73,21 @@ def dilation_preprocess(image: np.ndarray) -> np.ndarray:
     dilated_img[mask_y.ravel(), :] = 0
     dilated_img[:, mask_x.ravel()] = 0
 
-    plt.imsave("refactor/images_out/2_dilated.png", dilated_img, cmap=plt.cm.gray)
+    if display_intermediate_images:
+        plt.imsave("refactor/images_out/2_dilated.png", dilated_img, cmap=plt.cm.gray)
 
     return dilated_img
 
 #perform circle hit-or-miss on a thresholded image to find pupil
-def erosion_preprocess(image: np.ndarray) -> np.ndarray:
+def erosion_preprocess(image: np.ndarray, display_intermediate_images=False) -> np.ndarray:
     disk = morphology.disk(PARAMETERS.erosion_disk_radius)
     eroded = deepcopy(image)
 
     while np.count_nonzero(eroded) > PARAMETERS.erosion_max_pixels:
         eroded = morphology.binary_erosion(eroded, disk)
 
-    plt.imsave("refactor/images_out/3_eroded.png", eroded, cmap=plt.cm.gray)
+    if display_intermediate_images:
+        plt.imsave("refactor/images_out/3_eroded.png", eroded, cmap=plt.cm.gray)
 
     return eroded
 

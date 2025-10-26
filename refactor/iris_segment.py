@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from .constants import IRIS_COLOR, PARAMETERS
 from .image_processing import *
 
-def iris_segmentation_and_prediction(image_path: str) -> IRIS_COLOR:
+def iris_segmentation_and_prediction(image_path: str, display_intermediate_images=False) -> tuple[IRIS_COLOR, np.ndarray]:
     '''
         Segments an iris from an image of an eye and predicts the color.
 
@@ -34,14 +34,16 @@ def iris_segmentation_and_prediction(image_path: str) -> IRIS_COLOR:
 
     bin_threshold_img = gray_noiseless < intensity_threshold
 
-    plt.imsave("refactor/images_out/1_bin_threshold.png", bin_threshold_img, cmap=plt.cm.gray)
+    if display_intermediate_images:
+        plt.imsave("refactor/images_out/1_bin_threshold.png", bin_threshold_img, cmap=plt.cm.gray)
 
     # get pupil position coords and sliced eye image
     coords  = calculate_pupil_position(gray_noiseless, intensity_threshold)
     top, bottom, left, right, yavg, xavg, rad_x, rad_y = coords
     clipped_bin_img = bin_threshold_img[top:bottom, left:right]
 
-    plt.imsave("refactor/images_out/4_eye_img.png", clipped_bin_img, cmap=plt.cm.gray)
+    if display_intermediate_images:
+        plt.imsave("refactor/images_out/4_eye_img.png", clipped_bin_img, cmap=plt.cm.gray)
 
     # get center and radius of circle from canny edge and hough circle detection
     cx, cy, radii = get_iris_center(clipped_bin_img)
@@ -62,7 +64,8 @@ def iris_segmentation_and_prediction(image_path: str) -> IRIS_COLOR:
     iris_img[~mask] = [0, 0, 0]
     # eye_threshold = bin_threshold_img[~mask] = 0
     
-    plt.imsave("refactor/images_out/5_iris.png", iris_img, cmap=plt.cm.gray)
+    if display_intermediate_images:
+        plt.imsave("refactor/images_out/5_iris.png", iris_img, cmap=plt.cm.gray)
 
     avg_colour = np.floor(img[mask].mean(axis=0)).astype(int)
     # print(avg_colour)
