@@ -18,5 +18,5 @@ class PARAMETERS:
     erosion_max_pixels = 500
     group_radius_factor = 0.25
     eye_radius_factor = 0.12
-    iris_inner_radius = 0.1
+    iris_inner_radius = 0.3
     iris_outer_radius = 0.7

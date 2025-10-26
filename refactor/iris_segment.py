@@ -38,15 +38,19 @@ def iris_segmentation_and_prediction(image_path: str) -> IRIS_COLOR:
 
     # get pupil position coords and sliced eye image
     coords  = calculate_pupil_position(gray_noiseless, intensity_threshold)
-    top, bottom, left, right, xavg, yavg, rad_x, rad_y = coords
-    eye_img = img[top:bottom, left:right]
+    top, bottom, left, right, yavg, xavg, rad_x, rad_y = coords
+    clipped_bin_img = bin_threshold_img[top:bottom, left:right]
+
+    plt.imsave("refactor/images_out/4_eye_img.png", clipped_bin_img, cmap=plt.cm.gray)
 
     # get center and radius of circle from canny edge and hough circle detection
-    cx, cy, radii = get_iris_center(bin_threshold_img)
+    cx, cy, radii = get_iris_center(clipped_bin_img)
 
-    cxt = cy[0] + xavg - rad_x
-    cyt = cx[0] + yavg - rad_y
-    radi = radii[0] * (img.shape[1] / eye_img.shape[1])
+    cxt = cx[0] + xavg - rad_x
+    cyt = cy[0] + yavg - rad_y
+    radi = radii[0] * (img.shape[1] / clipped_bin_img.shape[1])
+
+    # print(cx, cy, radii)
 
     # create a mask for pixels within the iris radius
     Y, X = np.ogrid[:img.shape[0], :img.shape[1]]
@@ -58,9 +62,10 @@ def iris_segmentation_and_prediction(image_path: str) -> IRIS_COLOR:
     iris_img[~mask] = [0, 0, 0]
     # eye_threshold = bin_threshold_img[~mask] = 0
     
-    plt.imsave("refactor/images_out/4_iris.png", iris_img, cmap=plt.cm.gray)
+    plt.imsave("refactor/images_out/5_iris.png", iris_img, cmap=plt.cm.gray)
 
-    avg_colour = np.floor(np.average(iris_img.reshape(-1, iris_img.shape[-1]), axis=0)) 
+    avg_colour = np.floor(img[mask].mean(axis=0)).astype(int)
+    # print(avg_colour)
 
     color_class = predict_eye_color(avg_colour)
     
@@ -96,8 +101,8 @@ def calculate_pupil_position(img: np.ndarray, intensity_threshold: float):
         intensity_threshold += PARAMETERS.threshold_increase
     
     # set eye ball radii
-    rad_x = int(PARAMETERS.eye_radius_factor * img_height) 
-    rad_y = int(PARAMETERS.eye_radius_factor * img_width) 
+    rad_y = int(PARAMETERS.eye_radius_factor * img_height) 
+    rad_x = int(PARAMETERS.eye_radius_factor * img_width) 
 
     # get average intensities of each pixel group
     avg_a = np.average([img[x, y] for x, y in group_a])
@@ -106,18 +111,18 @@ def calculate_pupil_position(img: np.ndarray, intensity_threshold: float):
     # pick the average coords based on the greater average intensity between the two groups
     # TODO this was actually lesser than before - check if it does worse the other way now
     if avg_a < avg_b or np.isnan(avg_b):
-        xavg, yavg = np.floor(np.average(group_a, 0))
+        yavg, xavg = np.floor(np.average(group_a, 0))
     else:
-        xavg, yavg = np.floor(np.average(group_b, 0))
-    xavg, yavg = int(xavg), int(yavg)
+        yavg, xavg = np.floor(np.average(group_b, 0))
+    yavg, xavg = int(yavg), int(xavg)
 
     # get image coord slices
-    top= np.max([xavg - rad_x, 0])
-    bottom = np.min([xavg + rad_x, img_height])
-    left = np.max([yavg - rad_y, 0]) 
-    right = np.min([yavg + rad_y, img_width])
+    top= np.max([yavg - rad_y, 0])
+    bottom = np.min([yavg + rad_y, img_height])
+    left = np.max([xavg - rad_x, 0]) 
+    right = np.min([xavg + rad_x, img_width])
 
-    return top, bottom, left, right, xavg, yavg, rad_x, rad_y     
+    return top, bottom, left, right, yavg, xavg, rad_x, rad_y     
     
 #find the iris center using canny edge detection and hough circles
 def get_iris_center(thresholded_img: np.ndarray): 
